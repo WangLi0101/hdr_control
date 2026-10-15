@@ -8,7 +8,7 @@
 | SDR | 2560 × 1440 | 180 Hz | 关 | 8 bit | SDR-180 |
 | HDR Safe | 2560 × 1440 | 120 Hz | 开 | 10 bit | HDR-120 |
 
-三个预设均需在 ColorControl 中设置 RGB / Full Range。应用不创建、不修改 ColorControl 预设。
+以上是首次启动的默认模式，可以在“自定义模式”中修改、删除或添加更多模式。默认三个预设均需在 ColorControl 中设置 RGB / Full Range。应用不创建、不修改 ColorControl 预设。
 
 ## 当前交付与验证范围
 
@@ -23,6 +23,21 @@
 3. 点击齿轮，Browse 选择真实的 `ColorControl.exe`，保存；路径、预设名均可修改。
 4. 面板显示器下拉框选择要读取/验证的显示器。默认读取主显示器，选择会保存。三个 ColorControl 预设必须配置为同一个显示器。
 5. 点击模式卡片执行一次预设，等待显示器恢复，应用将读取真实状态验证。HDR Safe 始终需要手动点击。
+
+## 自定义显示模式
+
+在主面板点击 **自定义模式**，或进入 Settings → **自定义模式…**，会打开独立编辑窗口。
+
+- 添加、编辑、删除模式，使用“上移 / 下移”调整主面板卡片顺序；保留 1–32 个模式。
+- 每个模式可填写：唯一的名称、ColorControl NVIDIA 预设名称、目标宽度和高度、刷新率、HDR 开关、色深、颜色编码及快捷键。刷新率支持 `59.94`、`143.97` 等小数。
+- 色深可选 6 / 8 / 10 / 12 / 16 bit；编码可选 RGB、YCbCr 4:4:4 / 4:2:2 / 4:2:0。实际可用组合由硬件、驱动和 ColorControl 决定，填写参数不会让不支持的模式变为可用。
+- 可指定最多一个“手动安全备用模式”。其他 HDR 模式失败时会提示切换到它；只有点击按钮才会执行。删除备用模式后不再出现该建议，也不会暗中退回固定 HDR-120 预设。
+- 主面板入口的“保存模式”立即保存并更新卡片/快捷键；从 Settings 打开的编辑器只更新设置草稿，还需点击 **Save settings**。取消或关闭编辑窗口会放弃尚未保存的编辑。
+- 模式切换期间不能编辑配置；编辑窗口打开时暂不执行全局模式快捷键，避免输入时误切换。
+
+**这里的参数用于切换后验证，实际切换仍执行对应的 ColorControl 预设。** 例如添加“电影 4K / 3840×2160 / 59.94Hz / HDR / 10bit / RGB”，需要先在 ColorControl 建好对应的预设，并填写它的名称；本工具不会根据表单自动创建 NVIDIA 预设。Full / Limited Range 仍由 ColorControl 配置，Windows 无法可靠读取时不宣称已验证。
+
+旧版 settings.json 会自动迁移：你修改过的三个预设名、快捷键、全局快捷键开关及其他偏好会保留。迁移后首次保存会改用 `Modes` 列表，不再写入旧的固定模式字段。
 
 再次启动只会向已有实例发送打开面板请求。托盘右键提供打开面板、刷新状态、设置、退出。Esc / 点击面板外隐藏；设置窗口失焦不会关闭。模式执行期间禁止退出和更改设置。
 
@@ -51,7 +66,7 @@
 - `QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS)` 读取活动路径、桌面分辨率和 rational 刷新率；`DisplayConfigGetDeviceInfo` 读取实际设备名称、Advanced Color、色深和颜色编码。GPU 名称由源 GDI 名称映射 `EnumDisplayDevices` 获取，未硬编码显卡或显示器。
 - 首先查询 SDK 的 `GET_ADVANCED_COLOR_INFO_2`（type 15），以 `activeColorMode == HDR` 判断，避免把 WCG 当 HDR；不支持时回退旧 Advanced Color API，排除 `wideColorEnforced`。API 失败时 HDR / 色深 / 编码显示 Unknown，绝不根据最后点击推断。
 - Windows 返回的 bits-per-channel 和编码属于驱动报告，可能不可用；本应用不将 RGB 当默认实际值。DisplayConfig 不提供可靠的 NVIDIA Full/Limited 动态范围，本应用不显示“Full 已验证”；需要在 ColorControl / NVIDIA 控制面板核对。
-- Active 卡片依据 HDR + 刷新率容差 `< 1 Hz`。切换后还检查 2560×1440、已知的色深和 RGB；未知的色深/编码不会伪造，结果消息会说明未验证部分。
+- Active 卡片和切换后校验使用该模式保存的分辨率、HDR、刷新率容差 `< 1 Hz`、已知的色深和颜色编码；未知的色深/编码不会伪造，结果消息会说明未验证部分。
 - 一次用户动作最多启动一次 preset，执行期间其他模式禁用。退出后等 1.8 秒，再读取同一物理目标。失败或不匹配只提示，不会自动重试、不自动切换 HDR Safe。
 - 30 秒超时只结束界面等待，不强杀 ColorControl。它仍在运行时执行门锁保持关闭，新的切换请求被拒绝，直至原进程退出。请处理 ColorControl 的挂起窗口；不要通过重启应用绕过正在执行的操作。
 - 读取拓扑遇到缓冲区变化最多重新查询 3 次，这只是读操作，不会重新应用预设。显示器断连时清除旧状态并显示不可用。
@@ -74,7 +89,7 @@
 | SDR 180 | Ctrl + Alt + S |
 | HDR Safe | Ctrl + Alt + J |
 
-设置中修改组合，例如 `Ctrl+Shift+F8`；数字键可写 `D1`。单个输入留空可关闭该项，或取消 Enable global hotkeys 全部关闭。Windows `RegisterHotKey` + `MOD_NOREPEAT`，冲突会指出对应模式和 Windows 错误。Win 组合部分被系统保留，建议 Ctrl+Alt。应用不注册 Win+Alt+B。
+在“自定义模式”中修改每个模式的组合，例如 `Ctrl+Shift+F8`；数字键可写 `D1`。单个输入留空可关闭该项，或在 Settings 取消 Enable global hotkeys 全部关闭。Windows `RegisterHotKey` + `MOD_NOREPEAT`，冲突会指出对应模式和 Windows 错误。Win 组合部分被系统保留，建议 Ctrl+Alt。应用不注册 Win+Alt+B。
 
 主题默认 System，跟随 Windows 应用主题；也可选 Dark / Light。开机启动使用用户级 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`，不需要管理员权限、服务或计划任务。需要保存固定 exe 位置；移动后重新保存启动设置。任务管理器可能另外禁用了启动项，可在 Windows 的“启动应用”重新启用。
 
@@ -87,7 +102,7 @@ Display Settings 使用 `ms-settings:display`。HDR 快捷入口尝试 `ms-setti
 %LOCALAPPDATA%\DisplayQuickControl\Logs\
 ```
 
-配置通过临时文件原子替换，损坏或读取失败使用默认值并给出提示。保存路径、三个预设名、目标显示器路径、快捷键、主题、行为和启动偏好，不写安装目录。`tray.ico` 是本地缓存的原创图标。
+配置通过临时文件原子替换，损坏或读取失败使用默认值并给出提示。保存可执行文件路径、自定义模式列表及顺序、目标显示器路径、快捷键、主题、行为和启动偏好，不写安装目录。模式字段非法时使用默认配置并提示；无效输入不能通过编辑器保存。`tray.ico` 是本地缓存的原创图标。
 
 日志最多保留最近约 7 个文件，每个约 1 MiB，按 UTC 时间记录启动、命令、显示状态、错误码。不会记录可执行文件路径、用户填写的预设名、显示器序列号、设备路径或原始 CLI 输出。日志写入失败不影响启动。
 

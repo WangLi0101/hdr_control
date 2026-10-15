@@ -17,6 +17,7 @@ public partial class ControlPanel : Window
     private readonly ControlPanelViewModel _viewModel;
     private bool _positioning, _queued, _allowClose;
     public event Action? SettingsRequested;
+    public event Action? CustomizeModesRequested;
     public ControlPanel(ControlPanelViewModel viewModel, SettingsService settings, PanelPositionService position)
     {
         InitializeComponent(); DataContext = _viewModel = viewModel; _settings = settings; _position = position;
@@ -59,6 +60,7 @@ public partial class ControlPanel : Window
     private void OnDeactivated(object? sender, EventArgs e) { if (_settings.Current.CloseOnDeactivate) Hide(); }
     private void OnPreviewKeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Escape) { Hide(); e.Handled = true; } }
     private void SettingsClick(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke();
+    private void CustomizeModesClick(object sender, RoutedEventArgs e) => CustomizeModesRequested?.Invoke();
     private void DisplaySettingsClick(object sender, RoutedEventArgs e) => OpenUri("ms-settings:display");
     private void HdrSettingsClick(object sender, RoutedEventArgs e) => OpenUri("ms-settings:display-hdr");
     private void OpenUri(string uri)

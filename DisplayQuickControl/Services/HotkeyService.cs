@@ -36,7 +36,7 @@ public sealed class HotkeyService(nint handle) : IDisposable
     {
         if (!settings.HotkeysEnabled) return;
         var used = new HashSet<(uint, uint)>();
-        foreach (var text in new[] { settings.HdrHotkey, settings.SdrHotkey, settings.SafeHotkey }.Where(s => !string.IsNullOrWhiteSpace(s)))
+        foreach (var text in settings.Modes.Select(m => m.Hotkey).Where(s => !string.IsNullOrWhiteSpace(s)))
             if (!used.Add(Parse(text))) throw new FormatException("Two modes cannot use the same hotkey.");
     }
     public string Apply(AppSettings settings)
@@ -44,10 +44,10 @@ public sealed class HotkeyService(nint handle) : IDisposable
         Dispose();
         if (!settings.HotkeysEnabled) return "";
         var errors = new List<string>();
-        var entries = new[] { (DisplayMode.Hdr144, settings.HdrHotkey), (DisplayMode.Sdr180, settings.SdrHotkey), (DisplayMode.Safe120, settings.SafeHotkey) };
         var id = 100;
-        foreach (var (mode, text) in entries)
+        foreach (var mode in settings.Modes)
         {
+            var text = mode.Hotkey;
             id++; if (string.IsNullOrWhiteSpace(text)) continue;
             try
             {

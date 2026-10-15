@@ -18,6 +18,7 @@ public partial class App : Application
     private ControlPanel? _panel;
     private ControlPanelViewModel _viewModel = null!;
     private SettingsWindow? _settingsWindow;
+    private ModeEditorWindow? _modeWindow;
     private readonly StartupService _startup = new();
     private readonly ThemeService _theme = new();
     private readonly DispatcherTimer _displayDebounce = new() { Interval = TimeSpan.FromMilliseconds(800) };
@@ -40,6 +41,7 @@ public partial class App : Application
             _tray = new TrayService(root, _log);
             _panel = new ControlPanel(_viewModel, _settings, new PanelPositionService(_tray));
             _panel.SettingsRequested += OpenSettings;
+            _panel.CustomizeModesRequested += OpenModeEditor;
             _tray.OpenRequested += () => _ = OpenPanelAsync();
             _tray.RefreshRequested += () => _ = RefreshFromTrayAsync();
             _tray.SettingsRequested += OpenSettings;
@@ -70,6 +72,7 @@ public partial class App : Application
     private async Task OpenPanelAsync()
     {
         if (_exiting || _panel is null) return;
+        if (_modeWindow is { IsVisible: true }) { _modeWindow.Activate(); return; }
         if (_settingsWindow is { IsVisible: true }) { _settingsWindow.Activate(); return; }
         try { await _panel.OpenAsync(); }
         catch (Exception ex) { _log?.Write("Panel Error", ex.GetType().Name); _viewModel.Message = ex.Message; }
@@ -81,11 +84,12 @@ public partial class App : Application
     }
     private async Task ApplyHotkeyAsync(DisplayMode mode)
     {
-        if (_viewModel.IsBusy) return;
+        if (_viewModel.IsBusy || _settingsWindow is { IsVisible: true } || _modeWindow is { IsVisible: true }) return;
         await OpenPanelAsync(); await _viewModel.ApplyAsync(mode);
     }
     private void OpenSettings()
     {
+        if (_modeWindow is { IsVisible: true }) { _modeWindow.Activate(); return; }
         if (_settingsWindow is { IsVisible: true }) { _settingsWindow.Activate(); return; }
         if (_viewModel.IsBusy) { _viewModel.Message = "Wait for the current display operation to finish before editing Settings."; _ = OpenPanelAsync(); return; }
         _panel?.Hide();
@@ -97,6 +101,22 @@ public partial class App : Application
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
     }
+    private void OpenModeEditor()
+    {
+        if (_modeWindow is { IsVisible: true }) { _modeWindow.Activate(); return; }
+        if (_viewModel.IsBusy) return;
+        _panel?.Hide();
+        var editor = new ModeEditorViewModel(_settings.Current.Modes, modes =>
+        {
+            if (_viewModel.IsBusy) throw new InvalidOperationException("请等待模式切换完成后保存。");
+            var updated = _settings.Copy(); updated.Modes = modes;
+            HotkeyService.Validate(updated); _settings.Save(updated);
+            return ApplyConfiguration();
+        });
+        _modeWindow = new ModeEditorWindow(editor) { WindowStartupLocation = WindowStartupLocation.CenterScreen };
+        _modeWindow.Closed += (_, _) => { _modeWindow = null; _ = OpenPanelAsync(); };
+        _modeWindow.Show();
+    }
     private string SaveSettings(AppSettings settings)
     {
         if (_viewModel.IsBusy) throw new InvalidOperationException("Wait until the display operation finishes before saving Settings.");
@@ -104,8 +124,12 @@ public partial class App : Application
         _startup.SetEnabled(settings.StartWithWindows);
         try { _settings.Save(settings); }
         catch { _startup.SetEnabled(oldStartup); throw; }
-        _theme.Apply(settings.Theme);
-        var warning = _hotkeys!.Apply(settings);
+        return ApplyConfiguration();
+    }
+    private string ApplyConfiguration()
+    {
+        _theme.Apply(_settings.Current.Theme); _viewModel.ReloadModes();
+        var warning = _hotkeys!.Apply(_settings.Current);
         _viewModel.Message = string.IsNullOrEmpty(warning) ? "Settings saved. Ready to switch displays." : warning;
         return string.IsNullOrEmpty(warning) ? "" : "Settings saved, but some shortcuts are unavailable:\n" + warning;
     }
@@ -117,7 +141,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _exiting = true; _displayDebounce.Stop(); _hotkeys?.Dispose(); _tray?.Dispose(); _instance.Dispose();
-        _panel?.CloseForExit(); _settingsWindow?.Close();
+        _panel?.CloseForExit(); _settingsWindow?.Close(); _modeWindow?.Close();
         _log?.Write("Application Exit", "Stopped."); base.OnExit(e);
     }
 }

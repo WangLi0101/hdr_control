@@ -27,6 +27,28 @@ Check(!DisplayMode.Hdr144.Matches(state with { ColorEncoding = "YCbCr 4:2:2" }),
 Check(!DisplayMode.Hdr144.Matches(state with { Width = 1920 }), "Wrong resolution fails verification");
 Check(!DisplayMode.Hdr144.IsActive(state with { RefreshRate = double.NaN }), "Invalid refresh cannot activate card");
 Check(DisplayMode.Hdr144.Matches(state with { BitsPerChannel = null, ColorEncoding = "Unknown" }), "Unavailable optional fields do not invent values");
+var customMode = new DisplayMode { Name = "电影 4K", PresetName = "Movie-4K", Width = 3840, Height = 2160, Hertz = 59.94,
+    Hdr = false, Bits = 12, ColorEncoding = "YCbCr 4:4:4" };
+var customState = state with { Width = 3840, Height = 2160, RefreshRate = 59.95, HdrEnabled = false, BitsPerChannel = 12, ColorEncoding = "YCbCr 4:4:4" };
+Check(customMode.Matches(customState), "Custom resolution, fractional rate, SDR, bit depth and YCbCr are verified");
+Check(!customMode.Matches(customState with { ColorEncoding = "RGB" }), "Custom encoding is not hardcoded to RGB");
+Check(!customMode.IsActive(customState with { Width = 2560 }), "Different resolutions do not activate the same mode");
+void RejectModes(List<DisplayMode> modes, string description)
+{
+    try { ModeConfiguration.Validate(modes); }
+    catch (FormatException) { Check(true, description); return; }
+    throw new Exception("FAIL: " + description);
+}
+ModeConfiguration.Validate([customMode]);
+RejectModes([], "Empty mode lists cannot be saved");
+RejectModes([customMode, customMode with { Name = "Duplicate" }], "Duplicate mode identities cannot be saved");
+RejectModes([customMode, customMode with { Id = "other" }], "Duplicate mode names cannot be saved");
+RejectModes([customMode with { PresetName = "" }], "Empty presets cannot be saved");
+RejectModes([customMode with { Hertz = double.NaN }], "Non-finite refresh targets cannot be saved");
+RejectModes([customMode with { Width = 0 }], "Invalid resolution cannot be saved");
+RejectModes([customMode with { Bits = 9 }], "Unsupported bit depth cannot be saved");
+RejectModes([customMode with { ColorEncoding = "Fake" }], "Unsupported encoding cannot be saved");
+RejectModes([DisplayMode.Safe120, customMode with { IsSafeFallback = true }], "Only one explicit fallback can be saved");
 Check(Marshal.SizeOf<DisplayPath>() == 72 && Marshal.SizeOf<ModeInfo>() == 64, "DisplayConfig native buffer layouts");
 Check(Marshal.SizeOf<AdvancedColor>() == 32 && Marshal.SizeOf<AdvancedColor2>() == 36, "Legacy and new advanced color layouts");
 Check(Marshal.SizeOf<TargetName>() == 420 && Marshal.SizeOf<SourceName>() == 84, "Native Unicode name layouts");
@@ -48,10 +70,26 @@ try
 {
     var log = new LogService(root); var settings = new SettingsService(root, log);
     File.WriteAllText(Path.Combine(root, "settings.json"), "{broken"); settings.Load();
-    Check(settings.Current.HdrPreset == "HDR-144" && settings.LoadWarning != null, "Damaged JSON falls back to defaults");
-    settings.Current.HdrPreset = "HDR test 中文"; settings.Save(settings.Current);
+    Check(settings.Current.Modes[0].PresetName == "HDR-144" && settings.LoadWarning != null, "Damaged JSON falls back to defaults");
+    settings.Current.Modes[0].PresetName = "HDR test 中文"; settings.Save(settings.Current);
     var reload = new SettingsService(root, log); reload.Load();
-    Check(reload.Current.HdrPreset == "HDR test 中文", "Atomic JSON save and Unicode round trip");
+    Check(reload.Current.Modes[0].PresetName == "HDR test 中文", "Atomic JSON save and Unicode round trip");
+    var legacyRoot = Path.Combine(root, "legacy"); Directory.CreateDirectory(legacyRoot);
+    var legacyPath = Path.Combine(legacyRoot, "settings.json");
+    File.WriteAllText(legacyPath, """{"HdrPreset":"My HDR","SdrPreset":"My SDR","SafePreset":"Safe custom","HdrHotkey":"","SdrHotkey":"Ctrl+Shift+S","HotkeysEnabled":false}""");
+    var legacy = new SettingsService(legacyRoot, log); legacy.Load();
+    Check(legacy.Current.Modes.Count == 3 && legacy.Current.Modes[0].PresetName == "My HDR" && legacy.Current.Modes[2].PresetName == "Safe custom", "Old preset names migrate into editable modes");
+    Check(legacy.Current.Modes[0].Hotkey == "" && legacy.Current.Modes[1].Hotkey == "Ctrl+Shift+S" && !legacy.Current.HotkeysEnabled, "Migration preserves disabled/custom shortcuts");
+    legacy.Save(legacy.Current);
+    Check(!File.ReadAllText(legacyPath).Contains("HdrPreset"), "New saves retire legacy fields");
+    var draft = legacy.Copy(); draft.Modes[0].Name = "Unsaved edit"; draft.Modes.Add(customMode);
+    Check(legacy.Current.Modes.Count == 3 && legacy.Current.Modes[0].Name != "Unsaved edit", "Editing drafts cannot mutate live configuration");
+    draft.Modes.Reverse(); legacy.Save(draft); legacy.Load();
+    Check(legacy.Current.Modes[0].Id == customMode.Id && legacy.Current.Modes[0].Hertz == 59.94 && legacy.Current.Modes.Count == 4, "Added modes, decimal rate and order survive restart");
+    var withoutCustom = legacy.Copy(); withoutCustom.Modes.RemoveAt(0); legacy.Save(withoutCustom); legacy.Load();
+    Check(legacy.Current.Modes.All(m => m.Id != customMode.Id), "Deleted modes stay deleted after restart");
+    File.WriteAllText(legacyPath, """{"Modes":[{"Name":"Invalid","PresetName":"P","Width":0}]}"""); legacy.Load();
+    Check(legacy.LoadWarning is not null && legacy.Current.Modes.Count == 3, "Invalid persisted mode data safely falls back to defaults");
     for (var i=0; i<12; i++) File.WriteAllText(Path.Combine(root,"Logs",$"old-{i}.log"),"old");
     log.Write("Test","rotation");
     Check(Directory.GetFiles(Path.Combine(root,"Logs"),"*.log").Length <= 7, "Log retention is bounded");

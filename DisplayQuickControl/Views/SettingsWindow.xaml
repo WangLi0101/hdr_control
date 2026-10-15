@@ -11,13 +11,12 @@
      <TextBox Text="{Binding Draft.ColorControlPath, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="ColorControl executable path"/>
      <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseCommand}" Margin="8,0,0,0"/>
     </Grid>
-    <TextBlock Text="Preset names must match your NVIDIA presets in ColorControl. Each preset must explicitly include HDR, refresh rate and color settings." Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,8,0,14"/>
-    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
-     <TextBlock Text="HDR · 144 Hz" VerticalAlignment="Center"/><TextBox Grid.Column="1" Text="{Binding Draft.HdrPreset, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" AutomationProperties.Name="HDR preset name"/>
-     <TextBlock Grid.Row="1" Text="SDR · 180 Hz" VerticalAlignment="Center"/><TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Draft.SdrPreset, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" AutomationProperties.Name="SDR preset name"/>
-     <TextBlock Grid.Row="2" Text="HDR Safe · 120 Hz" VerticalAlignment="Center"/><TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Draft.SafePreset, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="HDR Safe preset name"/>
-    </Grid>
-    <TextBlock Text="Select the monitor in the control panel. Your ColorControl presets must target the same monitor; this app does not rewrite them." Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,10,0,20"/>
+    <TextBlock Style="{StaticResource Section}" Text="DISPLAY MODES" Margin="0,18,0,8"/>
+    <ItemsControl ItemsSource="{Binding Modes}"><ItemsControl.ItemTemplate><DataTemplate>
+     <Border Background="{DynamicResource Card}" CornerRadius="6" Padding="10" Margin="0,0,0,6"><StackPanel><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Text="{Binding Summary}" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,4,0,0"/><TextBlock Text="{Binding Hotkey}" Foreground="{DynamicResource Accent}" FontSize="11" Margin="0,3,0,0"/></StackPanel></Border>
+    </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+    <Button Content="自定义模式…" Click="CustomizeModesClick" HorizontalAlignment="Left" Margin="0,4,0,8"/>
+    <TextBlock Text="添加、编辑、删除或排序模式，并配置每个模式的预设和快捷键。此处的更改需点击下方 Save settings 才会生效。" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,0,0,18"/>
     <TextBlock Style="{StaticResource Section}" Text="STARTUP"/>
     <CheckBox Content="Start with Windows" IsChecked="{Binding Draft.StartWithWindows}"/>
     <TextBlock Style="{StaticResource Section}" Text="BEHAVIOR" Margin="0,18,0,4"/>
@@ -25,12 +24,7 @@
     <CheckBox Content="Refresh display state when panel opens" IsChecked="{Binding Draft.RefreshOnOpen}"/>
     <TextBlock Style="{StaticResource Section}" Text="GLOBAL HOTKEYS" Margin="0,18,0,4"/>
     <CheckBox Content="Enable global hotkeys" IsChecked="{Binding Draft.HotkeysEnabled}"/>
-    <Grid Margin="0,6,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
-     <TextBlock Text="HDR 144" VerticalAlignment="Center"/><TextBox Grid.Column="1" Text="{Binding Draft.HdrHotkey, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" AutomationProperties.Name="HDR hotkey"/>
-     <TextBlock Grid.Row="1" Text="SDR 180" VerticalAlignment="Center"/><TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Draft.SdrHotkey, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" AutomationProperties.Name="SDR hotkey"/>
-     <TextBlock Grid.Row="2" Text="HDR Safe" VerticalAlignment="Center"/><TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Draft.SafeHotkey, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="HDR Safe hotkey"/>
-    </Grid>
-    <TextBlock Text="Use Ctrl, Alt, Shift or Win plus a letter or function key (for example Ctrl+Alt+H). Leave a field empty to disable that shortcut." Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,8,0,20"/>
+    <TextBlock Text="每个模式的快捷键可在“自定义模式”窗口中编辑，留空可关闭单个快捷键。" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,6,0,20"/>
     <TextBlock Style="{StaticResource Section}" Text="APPEARANCE"/>
     <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding Draft.Theme}" Margin="0,0,0,18" AutomationProperties.Name="Theme"/>
    </StackPanel>

@@ -19,32 +19,29 @@
     <TextBlock Grid.Column="1" Text="WINDOWS" Foreground="{DynamicResource Accent}" FontSize="9" VerticalAlignment="Center" ToolTip="State read from Windows; unavailable values are shown as Unknown."/>
    </Grid>
    <ComboBox ItemsSource="{Binding Displays}" SelectedItem="{Binding SelectedDisplay}" DisplayMemberPath="Label" IsEnabled="{Binding CanInteract}" Margin="0,0,0,14" ToolTip="Monitor whose state is read and verified. ColorControl presets must target this same monitor." AutomationProperties.Name="Target display"/>
-   <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/></Grid.ColumnDefinitions>
-    <Button Command="{Binding HdrCommand}" Style="{StaticResource ModeCard}" Tag="{Binding HdrActive}" AutomationProperties.Name="Apply HDR 144 Hz">
-     <StackPanel><Grid><TextBlock Text="&#xE706;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="22"/><TextBlock Text="HDR" HorizontalAlignment="Right" FontWeight="SemiBold"/></Grid>
-      <TextBlock Text="144" FontSize="30" FontWeight="SemiBold" Margin="0,12,0,0"/><TextBlock Text="{Binding HdrCaption}" FontSize="11" Margin="0,1,0,0"/>
-      <ProgressBar Height="2" IsIndeterminate="True" Margin="0,8,0,0"><ProgressBar.Style><Style TargetType="ProgressBar"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding LoadingMode}" Value="hdr"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style></ProgressBar>
-     </StackPanel>
-    </Button>
-    <Button Grid.Column="2" Command="{Binding SdrCommand}" Style="{StaticResource ModeCard}" Tag="{Binding SdrActive}" AutomationProperties.Name="Apply SDR 180 Hz">
-     <StackPanel><Grid><TextBlock Text="&#xE708;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="22"/><TextBlock Text="SDR" HorizontalAlignment="Right" FontWeight="SemiBold"/></Grid>
-      <TextBlock Text="180" FontSize="30" FontWeight="SemiBold" Margin="0,12,0,0"/><TextBlock Text="{Binding SdrCaption}" FontSize="11" Margin="0,1,0,0"/>
-      <ProgressBar Height="2" IsIndeterminate="True" Margin="0,8,0,0"><ProgressBar.Style><Style TargetType="ProgressBar"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding LoadingMode}" Value="sdr"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style></ProgressBar>
-     </StackPanel>
-    </Button>
+   <Grid Margin="0,0,0,8"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <TextBlock Style="{StaticResource Section}" Text="DISPLAY MODES" VerticalAlignment="Center" Margin="0"/>
+    <Button Grid.Column="1" Content="自定义模式" Style="{StaticResource QuietButton}" Click="CustomizeModesClick" IsEnabled="{Binding CanInteract}" FontSize="11"/>
    </Grid>
-   <Button Command="{Binding SafeCommand}" Style="{StaticResource ModeCard}" Tag="{Binding SafeActive}" Margin="0,10,0,18" AutomationProperties.Name="Apply HDR Safe 120 Hz">
-    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
-     <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE73E;" FontSize="22" VerticalAlignment="Center" Margin="0,0,14,0"/>
-     <StackPanel Grid.Column="1"><TextBlock Text="HDR Safe" FontWeight="SemiBold"/><TextBlock Text="{Binding SafeCaption}" FontSize="11" Margin="0,3,0,0"/></StackPanel>
-    </Grid>
-   </Button>
+   <ItemsControl ItemsSource="{Binding Modes}" Margin="-4,0,-4,14">
+    <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+    <ItemsControl.ItemTemplate><DataTemplate>
+     <Button Command="{Binding ApplyCommand}" Style="{StaticResource ModeCard}" Tag="{Binding IsActive}" Margin="4" AutomationProperties.Name="{Binding Name}">
+      <StackPanel><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
+       <TextBlock Text="{Binding Icon}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="20" Margin="0,0,8,0"/><TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+      </Grid><StackPanel Orientation="Horizontal" Margin="0,10,0,0"><TextBlock Text="{Binding Hertz}" FontSize="28" FontWeight="SemiBold"/><TextBlock Text=" Hz" FontSize="12" VerticalAlignment="Bottom" Margin="0,0,0,5"/></StackPanel>
+       <TextBlock Text="{Binding Details}" FontSize="10" Margin="0,3,0,0"/><TextBlock Text="{Binding Caption}" FontSize="11" Margin="0,4,0,0"/>
+       <ProgressBar Height="2" IsIndeterminate="True" Margin="0,8,0,0" Visibility="{Binding IsApplying, Converter={StaticResource BoolVisibility}}"/>
+      </StackPanel>
+     </Button>
+    </DataTemplate></ItemsControl.ItemTemplate>
+   </ItemsControl>
    <TextBlock Style="{StaticResource Section}" Text="CURRENT STATUS"/>
    <StackPanel Orientation="Horizontal"><Ellipse Width="6" Height="6" Fill="{DynamicResource Accent}" Margin="0,0,8,0"/><TextBlock Text="{Binding HdrText}" FontWeight="SemiBold" FontSize="15"/></StackPanel>
    <TextBlock Text="{Binding Signal}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="14,5,0,0"/>
    <TextBlock Text="{Binding Message}" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,12,0,0"/>
    <Border Visibility="{Binding ShowSafeSuggestion, Converter={StaticResource BoolVisibility}}" Background="{DynamicResource Card}" CornerRadius="8" Padding="12" Margin="0,10,0,0">
-    <StackPanel><TextBlock Text="HDR 144 may be unstable. Try HDR Safe (120 Hz)?" Foreground="{DynamicResource Warning}" FontSize="12"/><Button Content="Switch to HDR Safe" Command="{Binding SafeCommand}" Margin="0,8,0,0"/></StackPanel>
+    <StackPanel><TextBlock Text="{Binding FallbackMessage}" Foreground="{DynamicResource Warning}" FontSize="12"/><Button Content="{Binding FallbackButtonText}" Command="{Binding SafeCommand}" Margin="0,8,0,0"/></StackPanel>
    </Border>
    <Border Height="1" Background="{DynamicResource Stroke}" Margin="0,16,0,6"/>
    <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

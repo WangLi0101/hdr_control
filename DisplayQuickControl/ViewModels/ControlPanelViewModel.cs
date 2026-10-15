@@ -17,6 +17,7 @@ public sealed class ControlPanelViewModel : ObservableObject
     private DisplayState? _state;
     private DisplayState? _selectedDisplay;
     public ObservableCollection<DisplayState> Displays { get; } = [];
+    public ObservableCollection<ModeCardViewModel> Modes { get; } = [];
     public DisplayState? SelectedDisplay
     {
         get => _selectedDisplay;
@@ -34,17 +35,18 @@ public sealed class ControlPanelViewModel : ObservableObject
     public bool CanRefresh => !IsBusy && !IsRefreshing;
     public string Message { get => _message; set => Set(ref _message, value); }
     public bool ShowSafeSuggestion { get => _showSafe; private set => Set(ref _showSafe, value); }
-    public string LoadingMode { get => _loading; private set { Set(ref _loading, value); Changed(nameof(HdrCaption)); Changed(nameof(SdrCaption)); Changed(nameof(SafeCaption)); } }
-    public string HdrCaption => LoadingMode == "hdr" ? "Applying…" : "144 Hz · 10 bit";
-    public string SdrCaption => LoadingMode == "sdr" ? "Applying…" : "180 Hz · 8 bit";
-    public string SafeCaption => LoadingMode == "safe" ? "Applying…" : "120 Hz · 10 bit · Reduced bandwidth";
+    public string LoadingMode { get => _loading; private set { Set(ref _loading, value); UpdateCards(); } }
+    private DisplayMode? Fallback => _settings.Current.Modes.FirstOrDefault(m => m.IsSafeFallback);
+    public string FallbackMessage => $"The selected HDR mode may be unstable. Try {Fallback?.Name}?";
+    public string FallbackButtonText => $"Switch to {Fallback?.Name}";
     public DisplayState? State
     {
         get => _state;
         private set
         {
             Set(ref _state, value);
-            foreach (var property in new[] { nameof(MonitorName), nameof(Resolution), nameof(Adapter), nameof(HdrText), nameof(Signal), nameof(HdrActive), nameof(SdrActive), nameof(SafeActive) }) Changed(property);
+            foreach (var property in new[] { nameof(MonitorName), nameof(Resolution), nameof(Adapter), nameof(HdrText), nameof(Signal) }) Changed(property);
+            UpdateCards();
         }
     }
     public string MonitorName => State?.FriendlyName ?? "Display unavailable";
@@ -52,11 +54,6 @@ public sealed class ControlPanelViewModel : ObservableObject
     public string Adapter => State?.AdapterName ?? "Unknown adapter";
     public string HdrText => State?.HdrText ?? "HDR Unknown";
     public string Signal => State?.SignalText ?? "Refresh to read the current display signal";
-    public bool HdrActive => DisplayMode.Hdr144.IsActive(State);
-    public bool SdrActive => DisplayMode.Sdr180.IsActive(State);
-    public bool SafeActive => DisplayMode.Safe120.IsActive(State);
-    public ICommand HdrCommand { get; }
-    public ICommand SdrCommand { get; }
     public ICommand SafeCommand { get; }
     public ICommand RefreshCommand { get; }
     public ControlPanelViewModel(SettingsService settings, DisplayService display, ColorControlService color, LogService log)
@@ -64,11 +61,19 @@ public sealed class ControlPanelViewModel : ObservableObject
         _settings = settings; _display = display; _color = color; _log = log;
         if (!string.IsNullOrWhiteSpace(settings.Current.ColorControlPath))
             _message = "Display state is read from Windows. Choose a mode to apply its ColorControl preset.";
-        HdrCommand = new RelayCommand(async _ => await ApplyAsync(DisplayMode.Hdr144), _ => CanInteract);
-        SdrCommand = new RelayCommand(async _ => await ApplyAsync(DisplayMode.Sdr180), _ => CanInteract);
-        SafeCommand = new RelayCommand(async _ => await ApplyAsync(DisplayMode.Safe120), _ => CanInteract);
+        SafeCommand = new RelayCommand(async _ => { if (Fallback is { } mode) await ApplyAsync(mode); }, _ => CanInteract && Fallback is not null);
         RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => CanRefresh);
+        ReloadModes();
     }
+    public void ReloadModes()
+    {
+        Modes.Clear();
+        foreach (var mode in _settings.Current.Modes) Modes.Add(new ModeCardViewModel(mode, ApplyAsync, () => CanInteract));
+        ShowSafeSuggestion = false; Changed(nameof(FallbackMessage)); Changed(nameof(FallbackButtonText)); UpdateCards();
+        CommandManager.InvalidateRequerySuggested();
+    }
+    private void UpdateCards() { foreach (var card in Modes) card.Update(State, LoadingMode); }
+    private bool CanSuggestFallback(DisplayMode failed) => failed.Hdr && Fallback is { } fallback && fallback.Id != failed.Id;
     public async Task RefreshAsync()
     {
         if (IsBusy) return;
@@ -97,6 +102,9 @@ public sealed class ControlPanelViewModel : ObservableObject
     public async Task ApplyAsync(DisplayMode mode)
     {
         if (IsBusy) return;
+        var configured = _settings.Current.Modes.FirstOrDefault(m => m.Id == mode.Id);
+        if (configured is null) { Message = "This mode has been removed. Reopen the panel and select a mode."; return; }
+        mode = configured with { }; // Stable snapshot throughout this single operation.
         IsBusy = true; LoadingMode = mode.Id; ShowSafeSuggestion = false;
         var target = State?.DevicePath ?? _settings.Current.TargetDisplayPath;
         try
@@ -105,7 +113,7 @@ public sealed class ControlPanelViewModel : ObservableObject
             await ReadStateAsync(target);
             target = State!.DevicePath;
             Message = $"Applying {mode.Name}… The display may briefly go black.";
-            await _color.ApplyPresetAsync(mode.Preset(_settings.Current));
+            await _color.ApplyPresetAsync(mode.PresetName);
             Message = "Waiting for the display link to stabilize…";
             await Task.Delay(1800);
             await ReadStateAsync(target);
@@ -116,7 +124,7 @@ public sealed class ControlPanelViewModel : ObservableObject
             else
             {
                 Message = "Preset applied, but current display state does not match the expected configuration.";
-                ShowSafeSuggestion = mode == DisplayMode.Hdr144;
+                ShowSafeSuggestion = CanSuggestFallback(mode);
                 _log.Write("ColorControl Error", "Post-apply state mismatch; no retry.");
             }
         }
@@ -124,7 +132,7 @@ public sealed class ControlPanelViewModel : ObservableObject
         {
             State = null; Message = ex.Message;
             // Keep an explicit user action available. No preset is ever reapplied automatically.
-            ShowSafeSuggestion = mode == DisplayMode.Hdr144 && ex is not System.IO.FileNotFoundException;
+            ShowSafeSuggestion = CanSuggestFallback(mode) && ex is not System.IO.FileNotFoundException;
         }
         finally { LoadingMode = ""; IsBusy = false; }
     }
