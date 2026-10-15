@@ -23,13 +23,13 @@ public sealed class HotkeyService(nint handle) : IDisposable
                 case "WIN": modifiers |= 8; break;
                 default:
                     if (key != 0 || !Enum.TryParse<Key>(token, true, out var parsed) || !Enum.IsDefined(parsed) || parsed == System.Windows.Input.Key.None)
-                        throw new FormatException($"Invalid hotkey: {text}. Example: Ctrl+Alt+H; leave empty to disable.");
+                        throw new FormatException($"快捷键无效：{text}。示例：Ctrl+Alt+H；留空可禁用。");
                     key = (uint)KeyInterop.VirtualKeyFromKey(parsed);
-                    if (key is 0 or 16 or 17 or 18 or 91 or 92) throw new FormatException("Choose a letter, number (D0–D9), or function key.");
+                    if (key is 0 or 16 or 17 or 18 or 91 or 92) throw new FormatException("请选择字母键、数字键（D0–D9）或功能键。");
                     break;
             }
         }
-        if (key == 0 || modifiers == 0) throw new FormatException("A hotkey needs a modifier and a key, for example Ctrl+Alt+H.");
+        if (key == 0 || modifiers == 0) throw new FormatException("快捷键需包含修饰键和普通按键，例如 Ctrl+Alt+H。");
         return (modifiers | 0x4000, key); // MOD_NOREPEAT
     }
     public static void Validate(AppSettings settings)
@@ -37,7 +37,7 @@ public sealed class HotkeyService(nint handle) : IDisposable
         if (!settings.HotkeysEnabled) return;
         var used = new HashSet<(uint, uint)>();
         foreach (var text in settings.Modes.Select(m => m.Hotkey).Where(s => !string.IsNullOrWhiteSpace(s)))
-            if (!used.Add(Parse(text))) throw new FormatException("Two modes cannot use the same hotkey.");
+            if (!used.Add(Parse(text))) throw new FormatException("两个模式不能使用相同的快捷键。");
     }
     public string Apply(AppSettings settings)
     {
@@ -53,7 +53,7 @@ public sealed class HotkeyService(nint handle) : IDisposable
             {
                 var (modifiers, key) = Parse(text);
                 if (RegisterHotKey(handle, id, modifiers, key)) _registered[id] = mode;
-                else errors.Add($"{mode.Name}: {text} could not be registered (Windows error {Marshal.GetLastWin32Error()}). It may be in use.");
+                else errors.Add($"{mode.Name}：无法注册 {text}（Windows 错误 {Marshal.GetLastWin32Error()}），可能已被占用。");
             }
             catch (FormatException ex) { errors.Add(ex.Message); }
         }

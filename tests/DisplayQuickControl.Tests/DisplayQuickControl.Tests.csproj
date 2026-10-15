@@ -7,6 +7,8 @@
   <Compile Include="../../DisplayQuickControl/Services/SettingsService.cs" Link="Services/SettingsService.cs"/>
   <Compile Include="../../DisplayQuickControl/Services/LogService.cs" Link="Services/LogService.cs"/>
   <Compile Include="../../DisplayQuickControl/Services/ColorControlService.cs" Link="Services/ColorControlService.cs"/>
+  <Compile Include="../../DisplayQuickControl/Services/ColorControlPresetService.cs" Link="Services/ColorControlPresetService.cs"/>
   <Compile Include="../../DisplayQuickControl/Services/DisplayService.cs" Link="Services/DisplayService.cs"/>
+  <Compile Include="../../DisplayQuickControl/Services/DisplayTransitionService.cs" Link="Services/DisplayTransitionService.cs"/>
  </ItemGroup>
 </Project>

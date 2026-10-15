@@ -10,7 +10,7 @@ public sealed class ModeDraftViewModel : ObservableObject
 {
     private readonly string _id;
     private string _name, _preset, _width, _height, _hertz, _encoding, _hotkey;
-    private bool _hdr, _safe;
+    private bool _hdr, _safe, _defaultColors;
     private uint _bits;
     public string Name { get => _name; set => Set(ref _name, value); }
     public string PresetName { get => _preset; set => Set(ref _preset, value); }
@@ -20,6 +20,8 @@ public sealed class ModeDraftViewModel : ObservableObject
     public bool Hdr { get => _hdr; set => Set(ref _hdr, value); }
     public uint Bits { get => _bits; set => Set(ref _bits, value); }
     public string ColorEncoding { get => _encoding; set => Set(ref _encoding, value); }
+    public bool UseDefaultColorSettings { get => _defaultColors; set { if (Set(ref _defaultColors, value)) Changed(nameof(UseCustomColorSettings)); } }
+    public bool UseCustomColorSettings => !UseDefaultColorSettings;
     public string Hotkey { get => _hotkey; set => Set(ref _hotkey, value); }
     public bool IsSafeFallback { get => _safe; set => Set(ref _safe, value); }
     public ModeDraftViewModel(DisplayMode mode)
@@ -28,6 +30,7 @@ public sealed class ModeDraftViewModel : ObservableObject
         _width = mode.Width.ToString(CultureInfo.InvariantCulture); _height = mode.Height.ToString(CultureInfo.InvariantCulture);
         _hertz = mode.Hertz.ToString("0.#####", CultureInfo.InvariantCulture); _hdr = mode.Hdr; _bits = mode.Bits;
         _encoding = mode.ColorEncoding; _hotkey = mode.Hotkey; _safe = mode.IsSafeFallback;
+        _defaultColors = mode.UseDefaultColorSettings;
     }
     public DisplayMode ToMode()
     {
@@ -37,7 +40,7 @@ public sealed class ModeDraftViewModel : ObservableObject
         if (!double.TryParse(Hertz, NumberStyles.Float, CultureInfo.InvariantCulture, out var hertz))
             throw new FormatException($"{Name}：刷新率必须是数字，小数请使用 . 分隔。");
         return new DisplayMode { Id = _id, Name = Name.Trim(), PresetName = PresetName.Trim(), Width = width, Height = height,
-            Hertz = hertz, Hdr = Hdr, Bits = Bits, ColorEncoding = ColorEncoding, Hotkey = Hotkey.Trim(), IsSafeFallback = IsSafeFallback };
+            Hertz = hertz, Hdr = Hdr, Bits = Bits, ColorEncoding = ColorEncoding, UseDefaultColorSettings = UseDefaultColorSettings, Hotkey = Hotkey.Trim(), IsSafeFallback = IsSafeFallback };
     }
 }
 

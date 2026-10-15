@@ -5,7 +5,7 @@
  <SolidColorBrush x:Key="Accent" Color="#98BFFF"/><SolidColorBrush x:Key="Selected" Color="#263F64"/>
  <SolidColorBrush x:Key="SelectedText" Color="#B6D2FF"/><SolidColorBrush x:Key="Warning" Color="#FFD0BC"/>
  <BooleanToVisibilityConverter x:Key="BoolVisibility"/>
- <Style TargetType="Window"><Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI"/><Setter Property="FontSize" Value="13"/>
+ <Style TargetType="Window"><Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Microsoft YaHei UI"/><Setter Property="FontSize" Value="13"/>
   <Setter Property="Foreground" Value="{DynamicResource Text}"/><Setter Property="Background" Value="{DynamicResource Panel}"/>
  </Style>
  <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style>
@@ -29,9 +29,24 @@
  </Style>
  <Style x:Key="ModeCard" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
   <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="16,14"/>
-  <Style.Triggers>
-   <Trigger Property="Tag" Value="True"><Setter Property="Background" Value="{DynamicResource Selected}"/><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter Property="Foreground" Value="{DynamicResource SelectedText}"/></Trigger>
-  </Style.Triggers>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+   <Border x:Name="CardChrome" CornerRadius="8" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" RecognizesAccessKey="True"/>
+   </Border>
+   <ControlTemplate.Triggers>
+    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="CardChrome" Property="Background" Value="{DynamicResource Hover}"/></Trigger>
+    <DataTrigger Binding="{Binding IsActive}" Value="True">
+     <Setter TargetName="CardChrome" Property="Background" Value="{DynamicResource Selected}"/>
+     <Setter TargetName="CardChrome" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+     <Setter TargetName="CardChrome" Property="BorderThickness" Value="2"/>
+     <Setter TargetName="CardChrome" Property="Padding" Value="15,13"/>
+     <Setter Property="Foreground" Value="{DynamicResource SelectedText}"/>
+    </DataTrigger>
+    <Trigger Property="IsPressed" Value="True"><Setter TargetName="CardChrome" Property="Opacity" Value="0.8"/></Trigger>
+    <Trigger Property="IsEnabled" Value="False"><Setter TargetName="CardChrome" Property="Opacity" Value="0.6"/></Trigger>
+    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="CardChrome" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+   </ControlTemplate.Triggers>
+  </ControlTemplate></Setter.Value></Setter>
  </Style>
  <Style x:Key="QuietButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="8"/></Style>
  <Style TargetType="TextBox">
@@ -52,7 +67,7 @@
     <ToggleButton Focusable="False" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
      <ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="{DynamicResource Card}" CornerRadius="6" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" Padding="10,8"><TextBlock Text="⌄" HorizontalAlignment="Right" Foreground="{DynamicResource Muted}"/></Border></ControlTemplate></ToggleButton.Template>
     </ToggleButton>
-    <ContentPresenter Margin="10,8,26,8" IsHitTestVisible="False" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
+    <ContentPresenter Margin="10,8,26,8" IsHitTestVisible="False" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"/>
     <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False">
      <Border MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" MaxWidth="560" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Stroke}" BorderThickness="1" CornerRadius="6" Padding="4"><ScrollViewer MaxHeight="240"><ItemsPresenter/></ScrollViewer></Border>
     </Popup>

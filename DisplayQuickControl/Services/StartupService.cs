@@ -17,5 +17,5 @@ public sealed class StartupService
         if (enabled) key.SetValue(ValueName, Command(), RegistryValueKind.String);
         else key.DeleteValue(ValueName, false);
     }
-    private static string Command() => $"\"{Environment.ProcessPath ?? throw new InvalidOperationException("Executable path is unavailable.")}\"";
+    private static string Command() => $"\"{Environment.ProcessPath ?? throw new InvalidOperationException("无法获取程序路径。")}\"";
 }

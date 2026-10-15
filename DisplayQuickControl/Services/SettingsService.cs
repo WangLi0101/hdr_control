@@ -21,11 +21,26 @@ public sealed class SettingsService(string root, LogService log)
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException)
         {
-            Current = new(); LoadWarning = "Settings could not be read. Defaults are in use; save Settings to replace the damaged file.";
+            Current = new(); LoadWarning = "无法读取设置，已使用默认配置。保存设置可替换损坏的配置文件。";
             log.Write("Settings", $"Load failed ({ex.GetType().Name}); defaults used.");
         }
     }
     public AppSettings Copy() => JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(Current))!;
+    public void SaveWithSync(AppSettings settings, Action<AppSettings> synchronize)
+    {
+        var previous = Copy();
+        Save(settings);
+        try { synchronize(settings); }
+        catch (Exception syncError)
+        {
+            try { Save(previous); }
+            catch (Exception rollbackError)
+            {
+                throw new InvalidOperationException("ColorControl 同步失败，且无法恢复本工具原有设置。请检查配置目录的写入权限。", new AggregateException(syncError, rollbackError));
+            }
+            throw;
+        }
+    }
     public void Save(AppSettings settings)
     {
         settings.Normalize(); ModeConfiguration.Validate(settings.Modes); Directory.CreateDirectory(root);

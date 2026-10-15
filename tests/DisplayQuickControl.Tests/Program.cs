@@ -17,16 +17,20 @@ async Task Throws<T>(Func<Task> operation, string description) where T : Excepti
     catch (T) { Check(true, description); return; }
     throw new Exception("FAIL: " + description);
 }
-var state = new DisplayState("test", "Monitor", "Adapter", 2560, 1440, 143.97, true, 10, "RGB", true);
-Check(DisplayMode.Hdr144.Matches(state), "143.97 Hz HDR matches HDR 144");
+var state = new DisplayState("test", "Monitor", "Adapter", 2560, 1440, 179.95, true, 8, "RGB", true);
+Check(DisplayMode.Hdr180.Matches(state), "179.95 Hz HDR at 8 bit matches HDR 180");
 Check(DisplayMode.Sdr180.Matches(state with { RefreshRate = 179.95, HdrEnabled = false, BitsPerChannel = 8 }), "179.95 Hz SDR matches SDR 180");
-Check(DisplayMode.Safe120.Matches(state with { RefreshRate = 119.88 }), "119.88 Hz HDR matches Safe 120");
-Check(!DisplayMode.Hdr144.IsActive(state with { HdrEnabled = null }), "Unknown HDR never activates a card");
-Check(!DisplayMode.Hdr144.Matches(state with { BitsPerChannel = 8 }), "Known wrong bit depth fails verification");
-Check(!DisplayMode.Hdr144.Matches(state with { ColorEncoding = "YCbCr 4:2:2" }), "Known wrong encoding fails verification");
-Check(!DisplayMode.Hdr144.Matches(state with { Width = 1920 }), "Wrong resolution fails verification");
-Check(!DisplayMode.Hdr144.IsActive(state with { RefreshRate = double.NaN }), "Invalid refresh cannot activate card");
-Check(DisplayMode.Hdr144.Matches(state with { BitsPerChannel = null, ColorEncoding = "Unknown" }), "Unavailable optional fields do not invent values");
+Check(DisplayMode.Sdr180.Matches(state with { HdrEnabled = false, BitsPerChannel = 10, ColorEncoding = "YCbCr 4:4:4" }), "Default SDR colors do not enforce a fixed bit depth or encoding");
+Check(!DisplayMode.Sdr180.Matches(state) && !DisplayMode.Sdr180.Matches(state with { HdrEnabled = false, RefreshRate = 144 }), "Default color policy still verifies HDR Off and 180 Hz");
+Check(!(DisplayMode.Sdr180 with { UseDefaultColorSettings = false }).Matches(state with { HdrEnabled = false, BitsPerChannel = 10 }), "Explicit fixed SDR colors still verify the selected bit depth");
+Check(DisplayMode.Safe120.Matches(state with { RefreshRate = 119.88, BitsPerChannel = 10 }), "119.88 Hz HDR at 10 bit matches Safe 120");
+Check(!DisplayMode.Hdr180.IsActive(state with { HdrEnabled = null }), "Unknown HDR never activates a card");
+Check(!DisplayMode.Hdr180.Matches(state with { BitsPerChannel = 10 }), "Known wrong bit depth fails verification");
+Check(!DisplayMode.Hdr180.Matches(state with { RefreshRate = 143.97 }), "Old HDR 144 signal does not match HDR 180");
+Check(!DisplayMode.Hdr180.Matches(state with { ColorEncoding = "YCbCr 4:2:2" }), "Known wrong encoding fails verification");
+Check(!DisplayMode.Hdr180.Matches(state with { Width = 1920 }), "Wrong resolution fails verification");
+Check(!DisplayMode.Hdr180.IsActive(state with { RefreshRate = double.NaN }), "Invalid refresh cannot activate card");
+Check(DisplayMode.Hdr180.Matches(state with { BitsPerChannel = null, ColorEncoding = "Unknown" }), "Unavailable optional fields do not invent values");
 var customMode = new DisplayMode { Name = "电影 4K", PresetName = "Movie-4K", Width = 3840, Height = 2160, Hertz = 59.94,
     Hdr = false, Bits = 12, ColorEncoding = "YCbCr 4:4:4" };
 var customState = state with { Width = 3840, Height = 2160, RefreshRate = 59.95, HdrEnabled = false, BitsPerChannel = 12, ColorEncoding = "YCbCr 4:4:4" };
@@ -51,6 +55,7 @@ RejectModes([customMode with { ColorEncoding = "Fake" }], "Unsupported encoding 
 RejectModes([DisplayMode.Safe120, customMode with { IsSafeFallback = true }], "Only one explicit fallback can be saved");
 Check(Marshal.SizeOf<DisplayPath>() == 72 && Marshal.SizeOf<ModeInfo>() == 64, "DisplayConfig native buffer layouts");
 Check(Marshal.SizeOf<AdvancedColor>() == 32 && Marshal.SizeOf<AdvancedColor2>() == 36, "Legacy and new advanced color layouts");
+Check(Marshal.SizeOf<SetColorState>() == 24 && Marshal.OffsetOf<SetColorState>(nameof(SetColorState.Enabled)).ToInt32() == 20, "Separate HDR/WCG setters match Windows SDK layout");
 Check(Marshal.SizeOf<TargetName>() == 420 && Marshal.SizeOf<SourceName>() == 84, "Native Unicode name layouts");
 foreach (var scale in new[] { 1d, 1.25, 1.5, 1.75, 2 })
 {
@@ -68,14 +73,43 @@ var root = Path.Combine(Path.GetTempPath(), "dqc-tests-" + Guid.NewGuid());
 Directory.CreateDirectory(root);
 try
 {
+    PresetSyncChecks.Run(root, Check);
+    await DisplayTransitionChecks.Run(root, Check);
     var log = new LogService(root); var settings = new SettingsService(root, log);
     File.WriteAllText(Path.Combine(root, "settings.json"), "{broken"); settings.Load();
-    Check(settings.Current.Modes[0].PresetName == "HDR-144" && settings.LoadWarning != null, "Damaged JSON falls back to defaults");
+    Check(settings.Current.Modes[0].PresetName == "HDR-180" && settings.LoadWarning != null, "Damaged JSON falls back to defaults");
     settings.Current.Modes[0].PresetName = "HDR test 中文"; settings.Save(settings.Current);
     var reload = new SettingsService(root, log); reload.Load();
     Check(reload.Current.Modes[0].PresetName == "HDR test 中文", "Atomic JSON save and Unicode round trip");
+    var failedDraft = settings.Copy(); failedDraft.Modes[0].PresetName = "Unsynced preset";
+    try { settings.SaveWithSync(failedDraft, _ => throw new InvalidOperationException("Simulated sync failure")); throw new Exception("Sync failure ignored"); }
+    catch (InvalidOperationException) { }
+    reload.Load();
+    Check(settings.Current.Modes[0].PresetName == "HDR test 中文" && reload.Current.Modes[0].PresetName == "HDR test 中文" && failedDraft.Modes[0].PresetName == "Unsynced preset", "Sync failure restores live and persisted settings while preserving the edit draft");
+    var syncCalls = 0; var acceptedDraft = settings.Copy();
+    settings.SaveWithSync(acceptedDraft, current => { syncCalls++; Check(current == acceptedDraft, "Save sync receives the accepted custom mode draft"); });
+    Check(syncCalls == 1, "Saving modes invokes synchronization exactly once");
     var legacyRoot = Path.Combine(root, "legacy"); Directory.CreateDirectory(legacyRoot);
     var legacyPath = Path.Combine(legacyRoot, "settings.json");
+    File.WriteAllText(legacyPath, """{"Modes":[{"Id":"sdr","Name":"SDR 180","PresetName":"SDR-180","Hertz":180,"Hdr":false,"Bits":8}]}""");
+    var sdrMigration = new SettingsService(legacyRoot, log); sdrMigration.Load();
+    Check(sdrMigration.Current.Modes.Single().UseDefaultColorSettings, "Existing default SDR 180 migrates to default color settings");
+    sdrMigration.Current.Modes.Single().UseDefaultColorSettings = false;
+    sdrMigration.Save(sdrMigration.Current); sdrMigration.Load();
+    Check(!sdrMigration.Current.Modes.Single().UseDefaultColorSettings, "Explicit fixed SDR color preference survives save and reload without being migrated again");
+    File.WriteAllText(legacyPath, """{"Modes":[{"Id":"sdr","Name":"My SDR","PresetName":"Custom-SDR","Hertz":180,"Hdr":false,"Bits":8}]}"""); sdrMigration.Load();
+    Check(!sdrMigration.Current.Modes.Single().UseDefaultColorSettings, "Migration preserves existing customized SDR color settings");
+    File.WriteAllText(legacyPath, """{"Modes":[{"Id":"hdr","Name":"HDR 144","PresetName":"HDR-144","Hotkey":"Ctrl+Shift+H"}]}""");
+    var upgraded = new SettingsService(legacyRoot, log); upgraded.Load();
+    var hdr = upgraded.Current.Modes.Single();
+    Check(hdr.Name == "HDR 180" && hdr.PresetName == "HDR-180" && hdr.Hertz == 180 && hdr.Bits == 8 && hdr.Hotkey == "Ctrl+Shift+H", "Original HDR mode upgrades to 180 Hz 8 bit while preserving shortcut");
+    upgraded.Save(upgraded.Current); upgraded.Load();
+    Check(upgraded.Current.Modes.Single().Matches(state), "Upgraded HDR target survives save and reload");
+    File.WriteAllText(legacyPath, """{"Modes":[{"Id":"hdr","Name":"HDR 144","PresetName":"Custom HDR"}]}""");
+    upgraded.Load(); hdr = upgraded.Current.Modes.Single();
+    Check(hdr.PresetName == "Custom HDR" && hdr.Hertz == 144 && hdr.Bits == 10, "Customized HDR preset is preserved during upgrade");
+    File.WriteAllText(legacyPath, """{"HdrPreset":"HDR-144"}"""); upgraded.Load();
+    Check(upgraded.Current.Modes[0].PresetName == "HDR-180" && upgraded.Current.Modes[0].Matches(state), "Legacy default preset upgrades to HDR 180");
     File.WriteAllText(legacyPath, """{"HdrPreset":"My HDR","SdrPreset":"My SDR","SafePreset":"Safe custom","HdrHotkey":"","SdrHotkey":"Ctrl+Shift+S","HotkeysEnabled":false}""");
     var legacy = new SettingsService(legacyRoot, log); legacy.Load();
     Check(legacy.Current.Modes.Count == 3 && legacy.Current.Modes[0].PresetName == "My HDR" && legacy.Current.Modes[2].PresetName == "Safe custom", "Old preset names migrate into editable modes");

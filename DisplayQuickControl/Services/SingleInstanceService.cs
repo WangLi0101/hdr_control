@@ -23,7 +23,7 @@ public sealed class SingleInstanceService : IDisposable
             catch (TimeoutException) { }
             catch (IOException) { }
         }
-        throw new IOException("The existing instance did not respond. Check the tray or restart Display Quick Control.");
+        throw new IOException("已运行的实例未响应，请检查托盘或重新启动显示快捷控制。");
     }
     public async Task ListenAsync(Action show, LogService log)
     {

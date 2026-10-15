@@ -21,7 +21,7 @@ public static class ModeConfiguration
                 throw new FormatException($"{mode.Name}：分辨率宽高需为 1–32768 的整数。");
             if (!double.IsFinite(mode.Hertz) || mode.Hertz is < 1 or > 1000)
                 throw new FormatException($"{mode.Name}：刷新率需为 1–1000 Hz，可填写小数。");
-            if (!BitDepths.Contains(mode.Bits) || !Encodings.Contains(mode.ColorEncoding))
+            if (!mode.UseDefaultColorSettings && (!BitDepths.Contains(mode.Bits) || !Encodings.Contains(mode.ColorEncoding)))
                 throw new FormatException($"{mode.Name}：请选择支持的色深和颜色编码。");
             if (mode.IsSafeFallback) fallbacks++;
         }

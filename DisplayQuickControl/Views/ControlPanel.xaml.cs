@@ -66,7 +66,7 @@ public partial class ControlPanel : Window
     private void OpenUri(string uri)
     {
         try { Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true }); }
-        catch (Exception ex) { _viewModel.Message = "Windows settings could not be opened: " + ex.Message; }
+        catch (Exception ex) { _viewModel.Message = "无法打开 Windows 设置：" + ex.Message; }
     }
     public void CloseForExit() { _allowClose = true; Close(); }
 }

@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "DisplayQuickControl (Debug)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/DisplayQuickControl/bin/Debug/net10.0-windows/DisplayQuickControl.exe",
+      "cwd": "${workspaceFolder}/DisplayQuickControl",
+      "console": "internalConsole"
+    },
+    {
+      "name": "Attach to DisplayQuickControl",
+      "type": "coreclr",
+      "request": "attach"
+    }
+  ]
+}

@@ -29,7 +29,7 @@ public partial class App : Application
         if (!_instance.Acquire())
         {
             try { await _instance.SignalExistingAsync(); }
-            catch (IOException ex) { MessageBox.Show(ex.Message, "Display Quick Control", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            catch (IOException ex) { MessageBox.Show(ex.Message, "显示快捷控制", MessageBoxButton.OK, MessageBoxImage.Warning); }
             Shutdown(); return;
         }
         var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DisplayQuickControl");
@@ -57,7 +57,7 @@ public partial class App : Application
             if (!string.IsNullOrEmpty(warning))
             {
                 _viewModel.Message = warning;
-                MessageBox.Show(warning, "Display Quick Control · Hotkey conflict", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(warning, "显示快捷控制 · 快捷键冲突", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             _ = _instance.ListenAsync(() => Dispatcher.BeginInvoke(() => _ = OpenPanelAsync()), _log);
             // No StartupUri or Show(): normal startup creates only the tray icon.
@@ -65,7 +65,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             _log.Write("Application Error", ex.GetType().Name);
-            MessageBox.Show("Display Quick Control could not start. " + ex.Message, "Startup error", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show("显示快捷控制无法启动。" + ex.Message, "启动错误", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
         }
     }
@@ -91,12 +91,12 @@ public partial class App : Application
     {
         if (_modeWindow is { IsVisible: true }) { _modeWindow.Activate(); return; }
         if (_settingsWindow is { IsVisible: true }) { _settingsWindow.Activate(); return; }
-        if (_viewModel.IsBusy) { _viewModel.Message = "Wait for the current display operation to finish before editing Settings."; _ = OpenPanelAsync(); return; }
+        if (_viewModel.IsBusy) { _viewModel.Message = "请等待当前显示操作完成后再编辑设置。"; _ = OpenPanelAsync(); return; }
         _panel?.Hide();
         var draft = _settings.Copy();
         try { draft.StartWithWindows = _startup.IsEnabled(); }
         catch (Exception ex) { _log?.Write("Startup", ex.GetType().Name); }
-        var vm = new SettingsViewModel(draft, SaveSettings);
+        var vm = new SettingsViewModel(draft, SaveSettings, InitializePresets);
         _settingsWindow = new SettingsWindow(vm);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
@@ -110,7 +110,8 @@ public partial class App : Application
         {
             if (_viewModel.IsBusy) throw new InvalidOperationException("请等待模式切换完成后保存。");
             var updated = _settings.Copy(); updated.Modes = modes;
-            HotkeyService.Validate(updated); _settings.Save(updated);
+            HotkeyService.Validate(updated);
+            _settings.SaveWithSync(updated, SyncPresetsIfEnabled);
             return ApplyConfiguration();
         });
         _modeWindow = new ModeEditorWindow(editor) { WindowStartupLocation = WindowStartupLocation.CenterScreen };
@@ -119,10 +120,10 @@ public partial class App : Application
     }
     private string SaveSettings(AppSettings settings)
     {
-        if (_viewModel.IsBusy) throw new InvalidOperationException("Wait until the display operation finishes before saving Settings.");
+        if (_viewModel.IsBusy) throw new InvalidOperationException("请等待显示操作完成后再保存设置。");
         var oldStartup = _startup.IsEnabled();
         _startup.SetEnabled(settings.StartWithWindows);
-        try { _settings.Save(settings); }
+        try { _settings.SaveWithSync(settings, SyncPresetsIfEnabled); }
         catch { _startup.SetEnabled(oldStartup); throw; }
         return ApplyConfiguration();
     }
@@ -130,12 +131,39 @@ public partial class App : Application
     {
         _theme.Apply(_settings.Current.Theme); _viewModel.ReloadModes();
         var warning = _hotkeys!.Apply(_settings.Current);
-        _viewModel.Message = string.IsNullOrEmpty(warning) ? "Settings saved. Ready to switch displays." : warning;
-        return string.IsNullOrEmpty(warning) ? "" : "Settings saved, but some shortcuts are unavailable:\n" + warning;
+        _viewModel.Message = string.IsNullOrEmpty(warning) ? "设置已保存，可以切换显示模式。" : warning;
+        return string.IsNullOrEmpty(warning) ? "" : "设置已保存，但部分快捷键不可用：\n" + warning;
+    }
+    private void SyncPresetsIfEnabled(AppSettings settings)
+    {
+        if (!settings.SyncColorControlPresets || string.IsNullOrWhiteSpace(settings.ColorControlPath)) return;
+        SynchronizePresets(settings, updateExisting: true);
+    }
+    private string InitializePresets(AppSettings settings)
+    {
+        var result = SynchronizePresets(settings, updateExisting: false);
+        return $"初始化完成：新增 {result.Created} 个，保留 {result.Unchanged} 个已有预设。请保存设置后再点击模式卡片切换。";
+    }
+    private ColorControlPresetService.SyncResult SynchronizePresets(AppSettings settings, bool updateExisting)
+    {
+        if (_viewModel.IsBusy) throw new InvalidOperationException("请等待显示模式切换完成后同步预设。");
+        ModeConfiguration.Validate(settings.Modes);
+        // DisplayService reads on a worker task; no display operation is performed here.
+        var displays = new DisplayService(_log!).ReadAsync().GetAwaiter().GetResult();
+        var target = string.IsNullOrWhiteSpace(settings.TargetDisplayPath)
+            ? displays.FirstOrDefault(d => d.IsPrimary) ?? displays.FirstOrDefault()
+            : displays.FirstOrDefault(d => string.Equals(d.DevicePath, settings.TargetDisplayPath, StringComparison.OrdinalIgnoreCase));
+        if (target is null) throw new InvalidOperationException("目标显示器不可用，请在主面板重新选择显示器。");
+        var displayId = target.DevicePath.Split('#').ElementAtOrDefault(1);
+        if (displays.Count(d => string.Equals(d.DevicePath.Split('#').ElementAtOrDefault(1), displayId, StringComparison.OrdinalIgnoreCase)) != 1)
+            throw new InvalidOperationException("ColorControl 无法区分当前同型号显示器，请关闭自动同步并在 ColorControl 中手动绑定预设。");
+        var result = new ColorControlPresetService().Synchronize(settings.ColorControlPath, settings.Modes, target, updateExisting);
+        _log!.Write("Preset Sync", $"Created={result.Created}; Updated={result.Updated}; Unchanged={result.Unchanged}.");
+        return result;
     }
     private void ExitApplication()
     {
-        if (_viewModel.IsBusy) { _viewModel.Message = "A display operation is in progress. Wait for it to finish before exiting."; _ = OpenPanelAsync(); return; }
+        if (_viewModel.IsBusy) { _viewModel.Message = "正在执行显示操作，请等待完成后再退出。"; _ = OpenPanelAsync(); return; }
         Shutdown();
     }
     protected override void OnExit(ExitEventArgs e)

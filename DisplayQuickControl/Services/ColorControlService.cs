@@ -7,16 +7,24 @@ namespace DisplayQuickControl.Services;
 public sealed class ColorControlService(SettingsService settings, LogService log, TimeSpan? commandTimeout = null)
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
+    public void ValidatePreset(string presetName)
+    {
+        if (_gate.CurrentCount == 0) throw new InvalidOperationException("ColorControl 仍在执行上一条命令，请等待完成后再切换。");
+        var path = settings.Current.ColorControlPath;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            throw new FileNotFoundException("找不到 ColorControl.exe，请打开“设置”并选择程序。");
+        if (string.IsNullOrWhiteSpace(presetName)) throw new InvalidOperationException("预设名称为空，请检查设置。");
+    }
     public async Task ApplyPresetAsync(string presetName)
     {
-        if (!await _gate.WaitAsync(0)) throw new InvalidOperationException("ColorControl is still executing the previous command. Wait for it to finish before switching again.");
+        if (!await _gate.WaitAsync(0)) throw new InvalidOperationException("ColorControl 仍在执行上一条命令，请等待完成后再切换。");
         Process? process = null; var releaseHere = true;
         try
         {
             var path = settings.Current.ColorControlPath;
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-                throw new FileNotFoundException("ColorControl.exe was not found. Open Settings and select the executable.");
-            if (string.IsNullOrWhiteSpace(presetName)) throw new InvalidOperationException("The preset name is empty. Check Settings.");
+                throw new FileNotFoundException("找不到 ColorControl.exe，请打开“设置”并选择程序。");
+            if (string.IsNullOrWhiteSpace(presetName)) throw new InvalidOperationException("预设名称为空，请检查设置。");
             // Official README + CommandLineHandler.cs: --nvpreset <name/id> --nogui.
             // ArgumentList prevents quoting bugs and does not invoke a command shell.
             // Upstream Utils.OpenConsole may explicitly allocate a console; also request SW_HIDE.
@@ -33,7 +41,7 @@ public sealed class ColorControlService(SettingsService settings, LogService log
                     || line.Contains("error while executing", StringComparison.OrdinalIgnoreCase))) Interlocked.Exchange(ref cliError, 1);
             };
             process.OutputDataReceived += onLine; process.ErrorDataReceived += onLine;
-            if (!process.Start()) throw new InvalidOperationException("ColorControl could not be started.");
+            if (!process.Start()) throw new InvalidOperationException("无法启动 ColorControl。");
             process.BeginOutputReadLine(); process.BeginErrorReadLine();
             using var timeout = new CancellationTokenSource(commandTimeout ?? TimeSpan.FromSeconds(30));
             try { await process.WaitForExitAsync(timeout.Token); }
@@ -41,16 +49,16 @@ public sealed class ColorControlService(SettingsService settings, LogService log
             {
                 // Never kill/relaunch a display operation. Keep the gate closed until the process exits.
                 releaseHere = false; _ = ReleaseAfterExitAsync(process); process = null;
-                throw new TimeoutException("ColorControl did not finish within 30 seconds. No retry was performed. Further switching is blocked until this process exits; check ColorControl.");
+                throw new TimeoutException("ColorControl 在 30 秒内未完成操作，未自动重试。此进程退出前无法再次切换，请检查 ColorControl。");
             }
             if (process.ExitCode != 0 || Volatile.Read(ref cliError) != 0)
-                throw new InvalidOperationException($"ColorControl reported a preset error (exit {process.ExitCode}). Check the preset name and ColorControl logs.");
+                throw new InvalidOperationException($"ColorControl 报告预设错误（退出码 {process.ExitCode}）。请检查预设名称和 ColorControl 日志。");
             log.Write("Preset Applied", "Command completed; actual display state must be verified.");
         }
         catch (Win32Exception ex)
         {
             log.Write("ColorControl Error", $"Process launch failed: {ex.NativeErrorCode}.");
-            throw new InvalidOperationException("Could not start ColorControl. Check its path, runtime requirements and permissions.", ex);
+            throw new InvalidOperationException("无法启动 ColorControl，请检查程序路径、运行时依赖和访问权限。", ex);
         }
         catch (Exception ex) { log.Write("ColorControl Error", ex.GetType().Name); throw; }
         finally { process?.Dispose(); if (releaseHere) _gate.Release(); }

@@ -28,10 +28,10 @@ public sealed class TrayService : IDisposable
         using (var input = Application.GetResourceStream(new Uri("pack://application:,,,/DisplayQuickControl;component/Resources/Icons/app.ico"))!.Stream)
         using (var output = File.Create(iconPath)) input.CopyTo(output);
         var icon = LoadImage(0, iconPath, 1, 32, 32, 0x10); // LR_LOADFROMFILE, multi-resolution original artwork
-        if (icon == 0) throw new InvalidOperationException("Tray icon could not be loaded.");
+        if (icon == 0) throw new InvalidOperationException("无法加载托盘图标。");
         _data = new NotifyIconData { Size = (uint)Marshal.SizeOf<NotifyIconData>(), Window = Handle, Id = 1,
             Flags = 1 | 2 | 4 | 0x20 | 0x80, CallbackMessage = Callback, Icon = icon,
-            Tip = "Display Quick Control", Info = "", InfoTitle = "", Guid = _guid };
+            Tip = "显示快捷控制", Info = "", InfoTitle = "", Guid = _guid };
         Add();
     }
     private void Add()

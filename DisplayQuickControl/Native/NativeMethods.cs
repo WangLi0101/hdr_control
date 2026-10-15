@@ -42,6 +42,7 @@ internal static class NativeMethods
     }
     [StructLayout(LayoutKind.Sequential)] internal struct AdvancedColor { public DeviceHeader Header; public uint Flags, ColorEncoding, BitsPerChannel; }
     [StructLayout(LayoutKind.Sequential)] internal struct AdvancedColor2 { public DeviceHeader Header; public uint Flags, ColorEncoding, BitsPerChannel, ActiveColorMode; }
+    [StructLayout(LayoutKind.Sequential)] internal struct SetColorState { public DeviceHeader Header; public uint Enabled; }
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] internal struct DisplayDevice
     {
         public uint Size;
@@ -74,6 +75,7 @@ internal static class NativeMethods
     [DllImport("user32.dll", EntryPoint = "DisplayConfigGetDeviceInfo")] internal static extern int GetSourceName(ref SourceName info);
     [DllImport("user32.dll", EntryPoint = "DisplayConfigGetDeviceInfo")] internal static extern int GetAdvancedColor(ref AdvancedColor info);
     [DllImport("user32.dll", EntryPoint = "DisplayConfigGetDeviceInfo")] internal static extern int GetAdvancedColor2(ref AdvancedColor2 info);
+    [DllImport("user32.dll", EntryPoint = "DisplayConfigSetDeviceInfo")] internal static extern int SetAdvancedColorState(ref SetColorState info);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool EnumDisplayDevices(string? device, uint number, ref DisplayDevice info, uint flags);
     [DllImport("user32.dll")] internal static extern nint MonitorFromPoint(Point point, uint flags);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool GetMonitorInfo(nint monitor, ref MonitorInfo info);
